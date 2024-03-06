@@ -1,0 +1,242 @@
+Parameters:
+  NetworkStackName:
+    Type: String
+    Default: Network
+  Environment:
+    Type: String
+    Default: Production
+  ImageId:
+    Type: String
+    Default: ami-0fe630eb857a6ec83
+  Keypair:
+    Description: Select keypair for AutoScalingGroup Instance
+    Type: AWS::EC2::KeyPair::KeyName
+  DatabaseEp:
+    Description: Input the database name
+    Type: String
+    Default: mydb
+  RDSEndpoint:
+    Type: String
+    Description: URL of the RDS Endpoint
+  
+Resources:
+
+# Create Keypair
+  # Keypair:
+  #   Type: AWS::EC2::KeyPair
+  #   Properties:
+  #     KeyFormat: pem
+  #     KeyName: demo
+  #     KeyType: rsa
+  #     PublicKeyMaterial: |
+  #       -----BEGIN PUBLIC KEY-----
+  #       MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAygVJDvRdhp4WEAp8evpg
+  #       ow74qcz4aUyWIlMpKkpTcCyW3zGcBfkgoRgs/poXIlPo/yfMNeGKqS4jUvM6UDm0
+  #       v2vXP8E94+gFcBHXJOG9FyD9FQiOF218yAyFBQNElL/4DKbwLIBofWDRcov5jXLj
+  #       2XWdAR6XzVvi5DIoSks4ijz5EWrPEGyygeQtqPNi8iwncRWrMf1H06S1OYKO2yZi
+  #       Z/HImNWV54TaOUZcCfMaiApU45N87/R7d6RRcSRTtNs9t3kMdtingu8udek7g9nq
+  #       x7NX+nwQadirUSxB7j+LS/Rg7rNiaZISXfPa4qqNVp2IWaN93qwlRP7hOyoz7h6S
+  #       /CcXPmCNjNkNE3u4KBrMlolHOqg87W4mLrgtJDGGy8UoOhrfx+XC3VBhxZjiyZ+B
+  #       9CkerXFo97PW/ppyGFq8ppglmHxsO2BC8dX4p0pJhpqh+rVo9Srfhv4354Lavmnx
+  #       6MayuIU2p4Cessz2bHe3bcwnFDAJ9wmPWwWOw3AlIkwyDokPTAOfFqGBb9wpT3ht
+  #       VYOC7ceQg3Y+Kl1aO34TmzWfzZh9WYxHvdenu568wcUIfe0wzvkCN2/4L6zjd/y3
+  #       VWuqNv/bf0W/ZzcwHB/ms6qN0ab8RDLJDXDqcjdCX3BxKkxTrLN5aeRlbp9R+5Kq
+  #       6CCZAad27/K43ZYy6JGRq5UCAwEAAQ==
+  #       -----END PUBLIC KEY-----
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow https
+      VpcId: 
+        Fn::ImportValue:
+          !Sub '${NetworkStackName}-MyVPCId'
+      SecurityGroupIngress:
+        - IpProtocol: -1 #tcp
+          # FromPort: -1
+          # ToPort: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: Security Group Server
+
+# Create a Instance Profile For Fetching Parameter Store
+  MyEC2Role: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+  MyEC2RolePolicies: 
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: "EC2RoleSSMGetParameter"
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Action: "ssm:GetParameter"
+            Resource: "*"
+      Roles: 
+        - Ref: "MyEC2Role"
+  MyEC2InstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - Ref: "MyEC2Role"
+  
+
+# Create Launch Template
+  MyLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties: 
+      LaunchTemplateName: !Sub '${AWS::StackName}-launch-template'
+      LaunchTemplateData: 
+        BlockDeviceMappings: 
+          - Ebs:
+              VolumeSize: 22
+              VolumeType: gp2
+              DeleteOnTermination: true
+              Encrypted: true
+            DeviceName: /dev/xvdcz
+        CreditSpecification: 
+          CpuCredits: Unlimited
+        Monitoring: 
+          Enabled: true
+        ImageId: !Ref ImageId #ami-03a6eaae9938c858c 
+        InstanceType: t3.micro
+        IamInstanceProfile:
+          Arn: !GetAtt
+            - MyEC2InstanceProfile
+            - Arn
+        SecurityGroupIds: 
+          - !GetAtt "InstanceSecurityGroup.GroupId"
+        KeyName: !Ref Keypair
+        UserData:
+          Fn::Base64:
+            Fn::Sub: |
+              #!/bin/bash
+              useradd compnet
+              echo "Compnet123456" | passwd --stdin compnet
+              usermod -aG wheel compnet
+              cat >> /etc/ssh/sshd_config << EOF
+              Match User compnet
+                PasswordAuthentication yes
+              EOF
+              sed 's/PasswordAuthentication no/PasswordAuthentication yes/' -i /etc/ssh/sshd_config
+              systemctl restart sshd
+              githubtoken=$(aws ssm get-parameter --name "githubtoken" --query "Parameter.Value" --output text)
+              yum install -y nodejs npm mysql git
+              mkdir -p /aplikasi
+              cd /aplikasi
+              git clone https://$githubtoken@github.com/zidnifarhan21/demo-express.git
+              cd demo-express
+              mysql -h ${RDSEndpoint} -P 3306 -u compnet -pCompnet123456 < dbcreate.sql
+              touch .env
+              cat >> .env << EOF
+              host=localhost
+              user=compnet
+              password=Compnet123456
+              database=nodelogin
+              npm install
+              node login.js
+
+              
+
+# Create LoadBalancer and Auto Scaling Group
+  MyLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets: 
+        - Fn::ImportValue:
+            !Sub '${NetworkStackName}-PrivateSubnet1Id'
+        - Fn::ImportValue:
+            !Sub '${NetworkStackName}-PrivateSubnet2Id'
+      SecurityGroups: 
+        - !GetAtt "InstanceSecurityGroup.GroupId"
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+      Type: 'application'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-LoadBalancer'
+
+  ListenerRule1:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - Type: forward
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref MyTargetGroup
+                Weight: 1
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - compnet
+      ListenerArn: !Ref MyListener
+      Priority: 1
+
+  MyListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions: 
+      - Type: forward
+        ForwardConfig:
+          TargetGroups:
+            - TargetGroupArn: !Ref MyTargetGroup
+              Weight: 1
+      LoadBalancerArn: !Ref MyLoadBalancer
+      Port: 80
+      Protocol: "HTTP"
+
+  MyTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: true
+      HealthCheckPath: /
+      HealthCheckPort: 3000
+      Port: 3000
+      Protocol: HTTP
+      TargetType: instance
+      VpcId: 
+        Fn::ImportValue:
+          !Sub '${NetworkStackName}-MyVPCId'
+
+  MyAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones:
+        - us-east-1a
+        - us-east-1b
+      LaunchTemplate:
+        LaunchTemplateId: !Ref MyLaunchTemplate
+        Version: !GetAtt MyLaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: 2
+      TargetGroupARNs:
+        - !Ref MyTargetGroup
+      VPCZoneIdentifier:
+        - Fn::ImportValue:
+            !Sub '${NetworkStackName}-PrivateSubnet1Id'
+        - Fn::ImportValue:
+            !Sub '${NetworkStackName}-PrivateSubnet2Id'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ScalingGroup'
+          PropagateAtLaunch: True
+

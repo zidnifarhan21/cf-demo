@@ -1,0 +1,198 @@
+Parameters:
+  ParEnvironment:
+    Type: String
+    Default: Production
+  ParVPCCIDR:
+    Type: String
+    Default: 10.0.0.0/20
+  ParPubSubCIDR:
+    Type: String
+    Default: 10.0.0.0/24
+  ParPrivSub1CIDR:
+    Type: String
+    Default: 10.0.1.0/24
+  ParPrivSub2CIDR:
+    Type: String
+    Default: 10.0.2.0/24
+
+Resources:
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref ParVPCCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key : Name
+          Value: 
+            !Sub 'VPC-${ParEnvironment}'
+  #### Public Subnet ####
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: MyVPC
+      CidrBlock: !Ref ParPubSubCIDR
+      AvailabilityZone: us-east-1a
+      Tags:
+        - Key : Name
+          Value: Public Subnet
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: MyVPC
+      InternetGatewayId:
+        Ref: InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: MyVPC
+      Tags:
+        - Key: Name
+          Value: Public Route Table
+
+  PublicRouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: 
+        Ref: PublicRouteTable
+      SubnetId: 
+        Ref: PublicSubnet
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+  
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - NatGatewayEIP
+          - AllocationId
+      SubnetId:
+        Ref: PublicSubnet
+
+  #### Private Subnet 1 ####
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: MyVPC
+      CidrBlock: !Ref ParPrivSub1CIDR
+      AvailabilityZone: us-east-1a
+      Tags:
+        - Key : Name
+          Value: Private Subnet 1
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: MyVPC
+      Tags:
+        - Key: Name
+          Value: Private Route Table 1
+
+  Private1RouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: 
+        Ref: PrivateRouteTable1
+      SubnetId: 
+        Ref: PrivateSubnet1
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NatGateway
+  
+
+  #### Private Subnet 2 ####
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: MyVPC
+      CidrBlock: !Ref ParPrivSub2CIDR
+      AvailabilityZone: us-east-1b
+      Tags:
+        - Key : Name
+          Value: Private Subnet 2
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: MyVPC
+      Tags:
+        - Key: Name
+          Value: Private Route Table 2
+
+  Private2RouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: 
+        Ref: PrivateRouteTable2
+      SubnetId: 
+        Ref: PrivateSubnet2
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NatGateway
+  
+  
+
+Outputs:
+  VPCId:
+    Value:
+      Ref: MyVPC
+    Export:
+      Name:
+        'Fn::Sub': '${AWS::StackName}-MyVPCId'
+
+  PublicSubnetId:
+    Value:
+      Ref: PublicSubnet
+    Export:
+      Name: 
+        'Fn::Sub': '${AWS::StackName}-PublicSubnetId'
+
+  PrivateSubnet1Id:
+    Value:
+      Ref: PrivateSubnet1
+    Export:
+      Name:
+        'Fn::Sub': '${AWS::StackName}-PrivateSubnet1Id'
+
+  PrivateSubnet2Id:
+    Value:
+      Ref: PrivateSubnet2
+    Export:
+      Name:
+        'Fn::Sub': '${AWS::StackName}-PrivateSubnet2Id'
