@@ -1,0 +1,14 @@
+[
+    {
+        "ParameterKey": "Environment",
+        "ParameterValue": "Production"
+    },
+    {
+        "ParameterKey": "NetworkStackName",
+        "ParameterValue": "Network "
+    },
+    {
+        "ParameterKey": "WebPort",
+        "ParameterValue": "80"
+    }
+]

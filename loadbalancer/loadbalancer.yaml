@@ -1,0 +1,113 @@
+Parameters:
+  NetworkStackName:
+    Type: String
+    Default: Network
+  Environment:
+    Type: String
+    Default: Production
+  WebPort:
+    Type: String
+    Description: Port used by Web App
+    Default: 80
+
+Resources:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow https
+      VpcId: 
+        Fn::ImportValue:
+          !Sub '${NetworkStackName}-MyVPCId'
+      SecurityGroupIngress:
+        - IpProtocol: -1 #tcp
+          # FromPort: -1
+          # ToPort: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: Security Group for ALB
+
+  MyLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets: 
+        - Fn::ImportValue:
+            !Sub '${NetworkStackName}-PrivateSubnet1Id'
+        - Fn::ImportValue:
+            !Sub '${NetworkStackName}-PrivateSubnet2Id'
+      SecurityGroups: 
+        - !GetAtt "SecurityGroup.GroupId"
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+      Type: 'application'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-LoadBalancer'
+
+  ListenerRule1:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - Type: forward
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref MyTargetGroup
+                Weight: 1
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - compnet
+      ListenerArn: !Ref MyListener
+      Priority: 1
+
+  MyListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions: 
+      - Type: forward
+        ForwardConfig:
+          TargetGroups:
+            - TargetGroupArn: !Ref MyTargetGroup
+              Weight: 1
+      LoadBalancerArn: !Ref MyLoadBalancer
+      Port: 80
+      Protocol: "HTTP"
+
+  MyTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: true
+      HealthCheckPath: /
+      HealthCheckPort: !Ref WebPort
+      Port: !Ref WebPort
+      Protocol: HTTP
+      TargetType: instance
+      VpcId: 
+        Fn::ImportValue:
+          !Sub '${NetworkStackName}-MyVPCId'
+Outputs:
+  ALBArn:
+    Description: ARN of the Application Load Balancer
+    Value: !Ref MyLoadBalancer
+    Export:
+      Name: !Sub ${AWS::StackName}-ARN
+  ALBURL:
+    Description: The URL of the Application Load Balancer
+    Value: !GetAtt MyLoadBalancer.DNSName
+    Export:
+      Name: !Sub ${AWS::StackName}-URL
+  TargetGroupArn:
+    Description: ARN of the Target Group
+    Value: !Ref MyTargetGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-TargetGroupArn
+  ALBSecurityGroupId:
+    Description: ID of the ALB Security Group
+    Value: !Ref SecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-SecurityGroupId
