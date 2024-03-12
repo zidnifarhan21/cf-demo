@@ -9,7 +9,7 @@
     },
     {
         "ParameterKey": "ImageId",
-        "ParameterValue": "ami-0f403e3180720dd7e" //  redhat:ami-0fe630eb857a6ec83
+        "ParameterValue": "ami-0f403e3180720dd7e"
     },
     {
         "ParameterKey": "Keypair",
@@ -18,5 +18,6 @@
     {
         "ParameterKey": "ALBStack",
         "ParameterValue": "WebAppALB"
+
     }
 ]
