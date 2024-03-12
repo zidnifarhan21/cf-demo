@@ -1,0 +1,23 @@
+[
+    {
+        "ParameterKey": "Environment",
+        "ParameterValue": "Production"
+    },
+    {
+        "ParameterKey": "NetworkStackName",
+        "ParameterValue": "Network"
+    },
+    {
+        "ParameterKey": "ImageId",
+        "ParameterValue": "ami-0f403e3180720dd7e"
+    },
+    {
+        "ParameterKey": "Keypair",
+        "ParameterValue": "demo-cf"
+    },
+    {
+        "ParameterKey": "ALBStack",
+        "ParameterValue": "WebAppALB"
+
+    }
+]
