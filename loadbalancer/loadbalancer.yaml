@@ -35,9 +35,9 @@ Resources:
     Properties:
       Subnets: 
         - Fn::ImportValue:
-            !Sub '${NetworkStackName}-PrivateSubnet1Id'
+            !Sub '${NetworkStackName}-PublicSubnetId'
         - Fn::ImportValue:
-            !Sub '${NetworkStackName}-PrivateSubnet2Id'
+            !Sub '${NetworkStackName}-PublicSubnet2Id'
       SecurityGroups: 
         - !GetAtt "SecurityGroup.GroupId"
       Scheme: internet-facing
@@ -90,6 +90,7 @@ Resources:
       VpcId: 
         Fn::ImportValue:
           !Sub '${NetworkStackName}-MyVPCId'
+
 Outputs:
   ALBArn:
     Description: ARN of the Application Load Balancer
