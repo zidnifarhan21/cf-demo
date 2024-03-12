@@ -1,38 +1,42 @@
 Parameters:
-  ParEnvironment:
+  Environment:
     Type: String
     Default: Production
-  ParVPCCIDR:
+  VPCCIDR:
     Type: String
     Default: 10.0.0.0/20
-  ParPubSubCIDR:
+  PublicSubnetCIDR:
     Type: String
     Default: 10.0.0.0/24
-  ParPrivSub1CIDR:
+  PublicSubnet2CIDR:
     Type: String
     Default: 10.0.1.0/24
-  ParPrivSub2CIDR:
+  PrivateSub1CIDR:
     Type: String
     Default: 10.0.2.0/24
+  PrivateSub2CIDR:
+    Type: String
+    Default: 10.0.3.0/24
 
 Resources:
   MyVPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !Ref ParVPCCIDR
+      CidrBlock: !Ref VPCCIDR
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key : Name
           Value: 
-            !Sub 'VPC-${ParEnvironment}'
+            !Sub 'VPC-${Environment}'
+
   #### Public Subnet ####
   PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId:
         Ref: MyVPC
-      CidrBlock: !Ref ParPubSubCIDR
+      CidrBlock: !Ref PublicSubnetCIDR
       AvailabilityZone: us-east-1a
       Tags:
         - Key : Name
@@ -89,13 +93,36 @@ Resources:
       SubnetId:
         Ref: PublicSubnet
 
+  #### Public Subnet 2 ####
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: MyVPC
+      CidrBlock: !Ref PublicSubnet2CIDR
+      AvailabilityZone: us-east-1b
+      Tags:
+        - Key : Name
+          Value: Public Subnet 2
+
+  Public2RouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: 
+        Ref: PublicRouteTable
+      SubnetId: 
+        Ref: PublicSubnet2
+  
+
+  
+
   #### Private Subnet 1 ####
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId:
         Ref: MyVPC
-      CidrBlock: !Ref ParPrivSub1CIDR
+      CidrBlock: !Ref PrivateSub1CIDR
       AvailabilityZone: us-east-1a
       Tags:
         - Key : Name
@@ -134,7 +161,7 @@ Resources:
     Properties:
       VpcId:
         Ref: MyVPC
-      CidrBlock: !Ref ParPrivSub2CIDR
+      CidrBlock: !Ref PrivateSub2CIDR
       AvailabilityZone: us-east-1b
       Tags:
         - Key : Name
@@ -182,6 +209,13 @@ Outputs:
     Export:
       Name: 
         'Fn::Sub': '${AWS::StackName}-PublicSubnetId'
+
+  PublicSubnet2Id:
+    Value:
+      Ref: PublicSubnet2
+    Export:
+      Name: 
+        'Fn::Sub': '${AWS::StackName}-PublicSubnet2Id'
 
   PrivateSubnet1Id:
     Value:
